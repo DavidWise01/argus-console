@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Argus — Drift Console</title>
+<style>
+  :root{
+    --bg:#080a0e; --panel:#0e1218; --panel2:#11161e; --line:#1b232d; --line2:#27323e;
+    --ink:#cdd6e0; --dim:#7e8b99; --faint:#505d6b; --ghost:#37424e;
+    --mono:'SFMono-Regular',ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
+    --z1:#6ee7a8; --z1d:#2f6b50; --z2:#f0c674; --z2d:#7a5f2e; --z3:#f08a8a; --z3d:#7a3a3a;
+    --eye:#6fb8d4; --eyed:#2f5666; --accent:#8aa6ff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:
+    radial-gradient(1100px 520px at 50% -200px,#0d141c 0%,var(--bg) 70%);
+    color:var(--ink);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.5}
+  .wrap{max-width:1080px;margin:0 auto;padding:26px 20px 100px}
+
+  /* ---- top bar ---- */
+  .bar{display:flex;align-items:center;gap:16px;padding:16px 20px;border:1px solid var(--line);
+    background:linear-gradient(180deg,#0f141b,#0c1117);border-radius:12px;position:sticky;top:14px;z-index:30;
+    box-shadow:0 14px 40px -22px #000}
+  .eye{flex:0 0 auto}
+  .ttl{flex:1 1 auto}
+  .ttl h1{margin:0;font-size:16px;letter-spacing:.4em;font-weight:600}
+  .ttl .role{font-size:11px;color:var(--dim);letter-spacing:.14em;margin-top:3px}
+  .zonebox{display:flex;align-items:center;gap:11px;padding:8px 16px;border-radius:9px;
+    border:1px solid var(--line2);background:#0a0e13;transition:.35s}
+  .zdot{width:11px;height:11px;border-radius:50%;background:var(--ghost);transition:.35s;flex:0 0 auto}
+  .zlabel{font-family:var(--mono);font-size:12.5px;letter-spacing:.18em;color:var(--dim);transition:.35s}
+  .zsub{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--faint)}
+  body[data-zone="Z1"] .zonebox{border-color:var(--z1d)}
+  body[data-zone="Z1"] .zdot{background:var(--z1);box-shadow:0 0 12px var(--z1)}
+  body[data-zone="Z1"] .zlabel{color:var(--z1)}
+  body[data-zone="Z2"] .zonebox{border-color:var(--z2d);background:#13100a}
+  body[data-zone="Z2"] .zdot{background:var(--z2);box-shadow:0 0 12px var(--z2)}
+  body[data-zone="Z2"] .zlabel{color:var(--z2)}
+  body[data-zone="Z3"] .zonebox{border-color:var(--z3d);background:#150a0a}
+  body[data-zone="Z3"] .zdot{background:var(--z3);box-shadow:0 0 16px var(--z3);animation:pulse 1.1s infinite}
+  body[data-zone="Z3"] .zlabel{color:var(--z3)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  .grid{display:grid;grid-template-columns:1fr;gap:18px;margin-top:20px}
+  @media(min-width:860px){.grid{grid-template-columns:1.18fr .82fr}}
+  .card{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:18px 19px}
+  .card h2{margin:0 0 4px;font-size:10.5px;letter-spacing:.3em;text-transform:uppercase;
+    color:var(--faint);font-weight:700}
+  .card .desc{font-size:12px;color:var(--dim);margin-bottom:15px;line-height:1.55}
+
+  label.f{display:block;font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--faint);margin:14px 0 6px;font-weight:600}
+  textarea,input[type=text]{width:100%;background:#0a0e13;border:1px solid var(--line2);color:var(--ink);
+    border-radius:7px;padding:10px 12px;font-family:var(--mono);font-size:12.5px;line-height:1.6;
+    outline:none;transition:.13s}
+  textarea:focus,input:focus{border-color:var(--eyed)}
+  textarea{resize:vertical}
+  #goal{min-height:46px} #constraints{min-height:38px} #rev{min-height:120px}
+  .watching textarea#goal,.watching textarea#constraints,.watching .crit-in{border-style:dashed}
+
+  .crit{display:flex;gap:8px;align-items:center;margin-bottom:7px}
+  .crit input.crit-in{flex:1}
+  .crit .meas{flex:0 0 auto;display:flex;align-items:center;gap:5px;font-family:var(--mono);
+    font-size:10px;color:var(--dim);cursor:pointer;user-select:none;white-space:nowrap}
+  .crit .meas input{accent-color:var(--eye)}
+  .crit .del{flex:0 0 auto;background:none;border:none;color:var(--faint);cursor:pointer;
+    font-size:15px;padding:2px 6px;line-height:1}
+  .crit .del:hover{color:var(--z3)}
+
+  button{font-family:var(--mono);cursor:pointer;transition:.13s;border-radius:7px}
+  .btn{background:#131a23;border:1px solid var(--line2);color:var(--ink);
+    font-size:11.5px;letter-spacing:.06em;padding:9px 15px}
+  .btn:hover{border-color:var(--eyed);background:#16202b}
+  .btn:active{transform:translateY(1px)}
+  .btn.go{border-color:var(--z1d);color:var(--z1);background:#0b1611}
+  .btn.go:hover{background:#0f1d16}
+  .btn.warn{border-color:var(--z2d);color:var(--z2)}
+  .btn.ghost{background:none;border-color:var(--line)}
+  .btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
+  .addcrit{font-size:11px;color:var(--dim);background:none;border:1px dashed var(--line2);
+    padding:6px 12px;width:100%;margin-top:4px}
+  .addcrit:hover{color:var(--ink);border-color:var(--eyed)}
+  .rowbtn{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px;align-items:center}
+
+  /* ---- revision log ---- */
+  .revs{margin-top:6px;display:flex;flex-direction:column;gap:10px}
+  .empty{font-family:var(--mono);font-size:11px;color:var(--faint);padding:14px;text-align:center;
+    border:1px dashed var(--line);border-radius:8px}
+  .rev{border:1px solid var(--line);border-left:3px solid var(--line2);background:var(--panel2);
+    border-radius:8px;padding:12px 14px}
+  .rev.bad{border-left-color:var(--z2)}
+  .rev .rhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-family:var(--mono);font-size:11px}
+  .rev .rn{color:var(--eye);letter-spacing:.1em;font-weight:600}
+  .rev .metric{color:var(--dim)} .rev .metric b{color:var(--ink);font-weight:600}
+  .rev .metric.hot b{color:var(--z2)}
+  .rev .toggles{display:flex;gap:14px;flex-wrap:wrap;margin-top:11px;align-items:center}
+  .imp{display:flex;align-items:center;gap:6px}
+  .imp .ctext{font-family:var(--mono);font-size:10.5px;color:var(--dim);max-width:230px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .seg{display:inline-flex;border:1px solid var(--line2);border-radius:6px;overflow:hidden}
+  .seg button{background:#0a0e13;border:none;color:var(--faint);font-size:10px;padding:4px 9px;letter-spacing:.05em}
+  .seg button.on.up{background:#10231a;color:var(--z1)}
+  .seg button.on.hold{background:#1a1a22;color:var(--ink)}
+  .seg button.on.down{background:#231012;color:var(--z3)}
+  .contra{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10.5px;
+    color:var(--dim);cursor:pointer;user-select:none}
+  .contra input{accent-color:var(--z3)}
+
+  /* ---- signal board ---- */
+  .sigs{display:flex;flex-direction:column;gap:9px}
+  .sig{display:flex;align-items:flex-start;gap:11px;padding:10px 12px;border:1px solid var(--line);
+    border-radius:8px;background:#0b0f15;transition:.2s}
+  .sig.on{border-color:var(--z2d);background:#13100a}
+  .sig .sd{width:9px;height:9px;border-radius:50%;background:var(--ghost);margin-top:4px;flex:0 0 auto;transition:.2s}
+  .sig.on .sd{background:var(--z2);box-shadow:0 0 9px var(--z2)}
+  .sig .sname{font-family:var(--mono);font-size:11.5px;letter-spacing:.04em;color:var(--dim)}
+  .sig.on .sname{color:var(--ink)}
+  .sig .scode{color:var(--eye);font-weight:600}
+  .sig .sev{font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:3px;line-height:1.5}
+  .sig.on .sev{color:var(--z2)}
+
+  .toggleline{display:flex;align-items:center;gap:8px;margin-top:14px;font-family:var(--mono);
+    font-size:10.5px;color:var(--dim);cursor:pointer;user-select:none}
+  .toggleline input{accent-color:var(--eye)}
+
+  /* ---- event horizon pause ---- */
+  .horizon{margin-top:18px;border:1px solid var(--z3d);border-radius:12px;
+    background:linear-gradient(180deg,#160a0a,#0e0708);padding:0;overflow:hidden;display:none}
+  .horizon.show{display:block;animation:rise .3s ease}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .hbar{display:flex;align-items:center;gap:10px;padding:13px 17px;border-bottom:1px solid var(--z3d);
+    background:#1a0c0c}
+  .hbar .hd{width:10px;height:10px;border-radius:50%;background:var(--z3);box-shadow:0 0 12px var(--z3);
+    animation:pulse 1.1s infinite}
+  .hbar h3{margin:0;font-family:var(--mono);font-size:12.5px;letter-spacing:.14em;color:var(--z3)}
+  .hbody{padding:16px 17px}
+  .rep-field{margin-bottom:11px}
+  .rep-field .rk{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--z3d);margin-bottom:3px}
+  .rep-field .rv{font-family:var(--mono);font-size:12px;color:var(--ink);line-height:1.55}
+  .rep-field .rv.dim{color:var(--dim)}
+  .menu{margin-top:15px;display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  @media(max-width:560px){.menu{grid-template-columns:1fr}}
+  .opt{text-align:left;background:#120a0a;border:1px solid var(--z3d);color:var(--ink);
+    padding:11px 13px;font-family:var(--mono);font-size:11px;line-height:1.5}
+  .opt:hover{background:#1c0e0e;border-color:var(--z3)}
+  .opt b{color:var(--z3);letter-spacing:.05em;display:block;margin-bottom:3px;font-size:11.5px}
+  .opt span{color:var(--dim)}
+
+  /* resume gate */
+  .gate{display:none;margin-top:15px;border-top:1px solid var(--z3d);padding-top:15px}
+  .gate.show{display:block}
+  .gate h4{margin:0 0 10px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--z2)}
+  .gate select{width:100%;background:#0a0e13;border:1px solid var(--line2);color:var(--ink);
+    font-family:var(--mono);font-size:12px;padding:9px 11px;border-radius:7px;outline:none}
+
+  .ceiling{margin-top:22px;border:1px solid var(--line2);background:#0c1016;border-radius:10px;
+    padding:15px 17px;font-size:12px;color:var(--dim);line-height:1.65}
+  .ceiling b{color:var(--ink)} .ceiling .k{color:var(--eye);font-family:var(--mono)}
+  .ceiling .x{color:var(--z2)}
+
+  footer{margin-top:30px;font-family:var(--mono);font-size:10px;color:var(--faint);
+    letter-spacing:.05em;line-height:1.8;border-top:1px solid var(--line);padding-top:16px}
+  .delta{margin-top:6px}
+  .delta .dl{color:var(--ghost)}
+</style>
+</head>
+<body data-zone="Z1">
+<div class="wrap">
+
+  <!-- ================= TOP BAR ================= -->
+  <div class="bar">
+    <svg class="eye" width="42" height="42" viewBox="0 0 42 42" fill="none">
+      <ellipse cx="21" cy="21" rx="19" ry="12" stroke="#2f5666" stroke-width="1.4"/>
+      <ellipse cx="21" cy="21" rx="12" ry="11" stroke="#3c6878" stroke-width="1"/>
+      <circle cx="21" cy="21" r="6.5" stroke="#6fb8d4" stroke-width="1.4"/>
+      <circle cx="21" cy="21" r="2.6" fill="#6fb8d4"/>
+      <circle cx="23" cy="19" r="1" fill="#0a0e13"/>
+    </svg>
+    <div class="ttl">
+      <h1>ARGUS</h1>
+      <div class="role">EVENT-HORIZON DRIFT CONSOLE · executable</div>
+    </div>
+    <div class="zonebox">
+      <div class="zdot"></div>
+      <div>
+        <div class="zlabel" id="zlabel">Z1 · STABLE</div>
+        <div class="zsub" id="zsub">anchors not yet set</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- ============ LEFT COLUMN ============ -->
+    <div>
+      <!-- anchors -->
+      <div class="card" id="anchorCard">
+        <h2>Anchors</h2>
+        <div class="desc">The three things drift is measured against. No watch begins without a goal and at least one checkable criterion — missing anchors are W0, the first wandering signal.</div>
+
+        <label class="f">Goal · one sentence</label>
+        <textarea id="goal" spellcheck="false" placeholder="One sentence. What is this work supposed to become?"></textarea>
+
+        <label class="f">Success criteria · ≥1 checkable</label>
+        <div id="crits"></div>
+        <button class="addcrit" id="addCrit">+ add criterion</button>
+
+        <label class="f">Constraints</label>
+        <textarea id="constraints" spellcheck="false" placeholder="Non-negotiables: tone, format, scope, length, safety. May be &quot;none&quot;.">none</textarea>
+
+        <div class="rowbtn">
+          <button class="btn go" id="beginBtn">begin watch</button>
+          <button class="btn ghost" id="resetBtn">reset</button>
+          <button class="btn warn" id="forceBtn" disabled>force pause</button>
+        </div>
+      </div>
+
+      <!-- revision log -->
+      <div class="card" style="margin-top:18px">
+        <h2>Iterations</h2>
+        <div class="desc">Paste each revision as it's produced. Argus measures the delta against the previous one — length, and change magnitude from a real character-bigram similarity. Mark whether each criterion actually moved. The signals read these, not your word for it.</div>
+        <textarea id="rev" spellcheck="false" placeholder="Paste the next revision of the work here, then log it." disabled></textarea>
+        <div class="rowbtn">
+          <button class="btn" id="logBtn" disabled>log revision</button>
+          <span id="revcount" style="font-family:var(--mono);font-size:10.5px;color:var(--faint)"></span>
+        </div>
+        <div class="revs" id="revs"><div class="empty">no revisions logged — begin a watch, then paste v1</div></div>
+      </div>
+    </div>
+
+    <!-- ============ RIGHT COLUMN ============ -->
+    <div>
+      <div class="card">
+        <h2>Chaos signals</h2>
+        <div class="desc">Each fires only on evidence Argus can compute. C1 was impossible for the original spec — it had no baseline to compare against. This one snapshots your anchors and watches them.</div>
+        <div class="sigs" id="sigs"></div>
+
+        <label class="toggleline">
+          <input type="checkbox" id="grounding"> grounding-required task <span style="color:var(--ghost)">— lets C3 alone trip the horizon</span>
+        </label>
+      </div>
+
+      <!-- event horizon -->
+      <div class="horizon" id="horizon">
+        <div class="hbar"><div class="hd"></div><h3>ARGUS EVENT HORIZON — HUMAN DIRECTION REQUIRED</h3></div>
+        <div class="hbody">
+          <div class="rep-field"><div class="rk">Why stop now · last safe fork</div><div class="rv" id="repWhy"></div></div>
+          <div class="rep-field"><div class="rk">Signals triggered</div><div class="rv" id="repSig"></div></div>
+          <div class="rep-field"><div class="rk">What is drifting</div><div class="rv" id="repDrift"></div></div>
+          <div class="rep-field"><div class="rk">Unrepairable if continued</div><div class="rv dim" id="repLose"></div></div>
+
+          <div style="font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--z3d);
+            text-transform:uppercase;margin:16px 0 4px">Repair · choose one</div>
+          <div class="menu" id="menu">
+            <button class="opt" data-r="A"><b>A · re-anchor</b><span>Restate goal + criteria + constraints; resume with minimal edits only.</span></button>
+            <button class="opt" data-r="B"><b>B · roll back</b><span>Drop the drifted revision; resume from last known-good.</span></button>
+            <button class="opt" data-r="C"><b>C · verify</b><span>Halt output; log the open questions blocking progress; resume on answers.</span></button>
+            <button class="opt" data-r="D"><b>D · split</b><span>Narrow to one goal; pursue it alone with fresh anchors.</span></button>
+          </div>
+
+          <div class="gate" id="gate">
+            <h4 id="gateTitle">Resume gate — confirm to unlock</h4>
+            <div id="gateExtra"></div>
+            <label class="f">Approved next-step approach</label>
+            <select id="approach">
+              <option value="minimal edits">minimal edits</option>
+              <option value="restructure">restructure</option>
+              <option value="verify facts">verify facts</option>
+              <option value="new draft">produce new draft</option>
+            </select>
+            <div class="rowbtn">
+              <button class="btn go" id="confirmBtn">confirm · unlock</button>
+              <button class="btn ghost" id="cancelGate">cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ceiling">
+    What this is, said plainly: Argus measures drift from the bytes <b>you</b> hand it — it cannot watch a model you don't paste, and it has no opinion about whether the work is good, only whether it moved. <b>The terminal line is a lock now, not a wish.</b> When the horizon trips, the iteration log disables until you choose a repair — the original spec's <span class="x">=== END PAUSE REPORT ===</span> was a line a model promised to print and broke in its first breath; this is a state the instrument enforces. <span class="k">measured, not self-reported · enforced, not requested.</span>
+  </div>
+
+  <footer id="foot">no external calls · no persistence · sealed single file · the executable correction to a spec that could only ask</footer>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+
+/* ---------- real similarity: Sørensen–Dice over char bigrams ---------- */
+function bigrams(s){
+  s = s.toLowerCase().replace(/\s+/g," ").trim();
+  const m = new Map();
+  for(let i=0;i<s.length-1;i++){ const g=s.slice(i,i+2); m.set(g,(m.get(g)||0)+1); }
+  return m;
+}
+function diceSim(a,b){
+  if(!a && !b) return 1;
+  if(!a || !b) return 0;
+  const A=bigrams(a), B=bigrams(b);
+  let inter=0, totA=0, totB=0;
+  A.forEach(v=>totA+=v); B.forEach(v=>totB+=v);
+  if(totA===0 && totB===0) return 1;
+  if(totA===0 || totB===0) return 0;
+  A.forEach((cnt,g)=>{ if(B.has(g)) inter += Math.min(cnt,B.get(g)); });
+  return (2*inter)/(totA+totB);
+}
+const wordsOf = s => (s.trim().match(/\S+/g)||[]).length;
+
+/* ---------- state ---------- */
+const S = {
+  watching:false, halted:false, baseline:null, zone:"Z1",
+  crits:[],            // {id,text,measurable}
+  revs:[],             // {n,text,words,sim,change,grew,wgrowth,marks:{critId:'up'|'hold'|'down'},contradiction}
+  pendingRepair:null
+};
+let critSeq=0, revSeq=0;
+
+/* ---------- anchors: criteria ---------- */
+function addCrit(text="",measurable=false){
+  const id="c"+(++critSeq);
+  S.crits.push({id,text,measurable});
+  renderCrits();
+}
+function renderCrits(){
+  const host=$("crits"); host.innerHTML="";
+  S.crits.forEach(c=>{
+    const row=document.createElement("div"); row.className="crit";
+    row.innerHTML=`
+      <input type="text" class="crit-in" data-id="${c.id}" value="${c.text.replace(/"/g,'&quot;')}"
+        placeholder="checkable criterion (e.g. passes tests, 25% shorter, no open contradictions)">
+      <label class="meas"><input type="checkbox" data-id="${c.id}" ${c.measurable?"checked":""}>measurable</label>
+      <button class="del" data-id="${c.id}" title="remove">×</button>`;
+    host.appendChild(row);
+  });
+  host.querySelectorAll("input.crit-in").forEach(inp=>{
+    inp.addEventListener("input",e=>{ get(e.target.dataset.id).text=e.target.value; onAnchorEdit(); });
+  });
+  host.querySelectorAll(".meas input").forEach(inp=>{
+    inp.addEventListener("change",e=>{ get(e.target.dataset.id).measurable=e.target.checked; onAnchorEdit(); });
+  });
+  host.querySelectorAll(".del").forEach(b=>{
+    b.addEventListener("click",e=>{ S.crits=S.crits.filter(x=>x.id!==e.target.dataset.id); renderCrits(); onAnchorEdit(); });
+  });
+}
+const get = id => S.crits.find(c=>c.id===id);
+
+function anchorString(){
+  const g=$("goal").value.trim();
+  const cs=S.crits.map(c=>c.text.trim()+"|"+(c.measurable?"M":"-")).join("¶");
+  const k=$("constraints").value.trim();
+  return g+"§"+cs+"§"+k;
+}
+function anchorsValid(){
+  const g=$("goal").value.trim();
+  const realCrits=S.crits.filter(c=>c.text.trim());
+  return g.length>0 && realCrits.length>0;
+}
+function hasMeasurable(){ return S.crits.some(c=>c.text.trim() && c.measurable); }
+
+function onAnchorEdit(){ if(S.watching) recompute(); }
+
+/* ---------- begin / reset ---------- */
+$("beginBtn").addEventListener("click",()=>{
+  if(!anchorsValid()){
+    flashGuide("W0 — provide a goal sentence and at least one checkable criterion before the watch can begin.");
+    return;
+  }
+  S.watching=true; S.halted=false; S.baseline=anchorString(); S.revs=[]; revSeq=0;
+  document.body.classList.add("watching");
+  $("rev").disabled=false; $("logBtn").disabled=false; $("forceBtn").disabled=false;
+  $("beginBtn").textContent="watching…"; $("beginBtn").disabled=true;
+  renderRevs(); recompute();
+});
+$("resetBtn").addEventListener("click",()=>{
+  S.watching=false; S.halted=false; S.baseline=null; S.revs=[]; S.pendingRepair=null;
+  document.body.classList.remove("watching");
+  $("rev").disabled=true; $("logBtn").disabled=true; $("forceBtn").disabled=true;
+  $("rev").value=""; $("beginBtn").textContent="begin watch"; $("beginBtn").disabled=false;
+  hideHorizon(); renderRevs(); setZone("Z1","anchors not yet set"); renderSigs(blankSigs());
+  $("revcount").textContent="";
+});
+$("addCrit").addEventListener("click",()=>addCrit());
+$("goal").addEventListener("input",onAnchorEdit);
+$("constraints").addEventListener("input",onAnchorEdit);
+$("grounding").addEventListener("change",()=>{ if(S.watching) recompute(); });
+
+function flashGuide(msg){
+  setZone("Z2",msg.slice(0,60)); 
+  const z=$("zsub"); z.textContent=msg;
+}
+
+/* ---------- log a revision ---------- */
+$("logBtn").addEventListener("click",()=>{
+  if(S.halted) return;
+  const text=$("rev").value.trim();
+  if(!text){ return; }
+  const prev=S.revs[S.revs.length-1];
+  let sim=null, change=null, grew=false, wgrowth=0;
+  const w=wordsOf(text);
+  if(prev){
+    sim=diceSim(prev.text,text);
+    change=1-sim;
+    wgrowth=(w-prev.words)/Math.max(prev.words,1);
+    grew=w>prev.words;
+  }
+  const marks={};
+  S.crits.filter(c=>c.text.trim()).forEach(c=>marks[c.id]="hold");
+  S.revs.push({n:++revSeq,text,words:w,sim,change,grew,wgrowth,marks,contradiction:false});
+  $("rev").value="";
+  renderRevs(); recompute();
+});
+
+$("forceBtn").addEventListener("click",()=>{
+  // manual ARGUS PAUSE — always available to the human
+  triggerHorizon(buildReport(currentSignals(),true));
+});
+
+/* ---------- render revisions ---------- */
+function renderRevs(){
+  const host=$("revs");
+  if(!S.revs.length){
+    host.innerHTML=`<div class="empty">${S.watching?"watch active — paste v1 above":"no revisions logged — begin a watch, then paste v1"}</div>`;
+    $("revcount").textContent = S.watching ? "0 logged" : "";
+    return;
+  }
+  host.innerHTML="";
+  const realCrits=S.crits.filter(c=>c.text.trim());
+  S.revs.forEach(r=>{
+    const improved=Object.values(r.marks).filter(m=>m==="up").length;
+    const churn = r.change!==null && r.change>=0.40 && improved===0;
+    const card=document.createElement("div");
+    card.className="rev"+(churn?" bad":"");
+    const chgTxt = r.change===null ? '<span class="metric">baseline draft</span>'
+      : `<span class="metric ${r.change>=0.40?'hot':''}">Δ change <b>${Math.round(r.change*100)}%</b></span>`;
+    const wTxt = r.change===null ? `<span class="metric">words <b>${r.words}</b></span>`
+      : `<span class="metric">words <b>${r.words}</b> (${r.words-S.revs[S.revs.indexOf(r)-1].words>=0?'+':''}${r.words-S.revs[S.revs.indexOf(r)-1].words})</span>`;
+    let toggles=`<div class="toggles">`;
+    realCrits.forEach(c=>{
+      const m=r.marks[c.id]||"hold";
+      toggles+=`<div class="imp">
+        <span class="ctext" title="${c.text.replace(/"/g,'&quot;')}">${c.text||"criterion"}</span>
+        <div class="seg" data-rev="${r.n}" data-crit="${c.id}">
+          <button class="up ${m==="up"?"on":""}" data-m="up">↑</button>
+          <button class="hold ${m==="hold"?"on":""}" data-m="hold">—</button>
+          <button class="down ${m==="down"?"on":""}" data-m="down">↓</button>
+        </div></div>`;
+    });
+    toggles+=`<label class="contra"><input type="checkbox" data-rev="${r.n}" ${r.contradiction?"checked":""}>contradiction appeared</label>`;
+    toggles+=`</div>`;
+    card.innerHTML=`<div class="rhead"><span class="rn">REV ${r.n}</span>${chgTxt}${wTxt}</div>${toggles}`;
+    host.appendChild(card);
+  });
+  // wire toggles
+  host.querySelectorAll(".seg button").forEach(b=>{
+    b.addEventListener("click",e=>{
+      const seg=e.target.closest(".seg");
+      const rev=S.revs.find(x=>x.n==seg.dataset.rev);
+      rev.marks[seg.dataset.crit]=e.target.dataset.m;
+      renderRevs(); recompute();
+    });
+  });
+  host.querySelectorAll(".contra input").forEach(c=>{
+    c.addEventListener("change",e=>{
+      const rev=S.revs.find(x=>x.n==e.target.dataset.rev);
+      rev.contradiction=e.target.checked; recompute();
+    });
+  });
+  $("revcount").textContent=S.revs.length+" logged";
+}
+
+/* ---------- signal computation ---------- */
+function currentSignals(){
+  const sig={
+    C1:{on:false,ev:""}, C2:{on:false,ev:""}, C3:{on:false,ev:""}, C4:{on:false,ev:""},
+    W1:{on:false,ev:""}, lossOfAim:false, lossEv:""
+  };
+  // C1 — anchor drift vs baseline snapshot
+  if(S.watching && S.baseline!==null && anchorString()!==S.baseline){
+    sig.C1.on=true; sig.C1.ev="anchors changed after watch began — goal/criteria/constraints no longer match baseline";
+  }
+  // per-revision derived
+  const noGain = r => Object.values(r.marks).filter(m=>m==="up").length===0;
+  S.revs.forEach((r,i)=>{
+    if(r.change!==null && r.change>=0.40 && noGain(r)){
+      sig.C4.on=true; sig.C4.ev=`rev ${r.n}: ${Math.round(r.change*100)}% rewritten, 0 criteria improved`;
+    }
+    if(r.change!==null && r.grew && r.wgrowth>=0.15 && noGain(r)){
+      sig.C3.on=true; sig.C3.ev=`rev ${r.n}: +${Math.round(r.wgrowth*100)}% longer, 0 criteria improved`;
+    }
+    if(r.contradiction){
+      sig.C2.on=true; sig.C2.ev=`rev ${r.n}: contradiction flagged`;
+    }
+  });
+  // W1 — two consecutive no-gain iterations
+  for(let i=1;i<S.revs.length;i++){
+    if(noGain(S.revs[i]) && noGain(S.revs[i-1]) && S.revs[i].change!==null){
+      sig.W1.on=true; sig.W1.ev=`revs ${S.revs[i-1].n}→${S.revs[i].n}: two iterations, no measurable gain`;
+    }
+  }
+  // loss of aim
+  if(S.watching){
+    if(!$("goal").value.trim()){ sig.lossOfAim=true; sig.lossEv="goal sentence is empty"; }
+    else if(S.crits.filter(c=>c.text.trim()).length===0){ sig.lossOfAim=true; sig.lossEv="no criteria remain"; }
+    else if(S.revs.length>=1 && !hasMeasurable()){ sig.lossOfAim=true; sig.lossEv="no criterion is marked measurable — success can't be checked"; }
+  }
+  return sig;
+}
+function blankSigs(){return {C1:{on:false,ev:""},C2:{on:false,ev:""},C3:{on:false,ev:""},C4:{on:false,ev:""},W1:{on:false,ev:""},lossOfAim:false,lossEv:""};}
+
+const SIGDEF=[
+  ["C1","anchor drift","goal/criteria/constraints changed without going through repair"],
+  ["C2","contradiction spiral","inconsistencies appearing across revisions"],
+  ["C3","ungrounded fluency","more text, no measurable gain"],
+  ["C4","churn without gain","large rewrite, nothing improved against criteria"],
+  ["W1","non-improving loop","two consecutive iterations with no gain"]
+];
+function renderSigs(sig){
+  const host=$("sigs"); host.innerHTML="";
+  SIGDEF.forEach(([code,name,base])=>{
+    const s=sig[code];
+    const el=document.createElement("div");
+    el.className="sig"+(s.on?" on":"");
+    el.innerHTML=`<div class="sd"></div><div>
+      <div class="sname"><span class="scode">${code}</span> · ${name}</div>
+      <div class="sev">${s.on? s.ev : base}</div></div>`;
+    host.appendChild(el);
+  });
+}
+
+/* ---------- zone evaluation ---------- */
+function chaosCompounding(sig){
+  const active=["C1","C2","C3","C4"].filter(c=>sig[c].on).length;
+  if(sig.C2.on) return true;                                   // C2 alone (high-confidence)
+  if(sig.C3.on && $("grounding").checked) return true;         // C3 alone in grounding task
+  return active>=2;                                            // any two of C1–C4
+}
+function recompute(){
+  const sig=currentSignals();
+  renderSigs(sig);
+  if(S.halted){ return; }   // stay halted until repair chosen
+
+  const loss=sig.lossOfAim, chaos=chaosCompounding(sig);
+  const anyTurb = sig.C1.on||sig.C2.on||sig.C3.on||sig.C4.on||sig.W1.on||loss;
+
+  if(loss && chaos){
+    triggerHorizon(buildReport(sig,false));
+  } else if(anyTurb){
+    let note;
+    if(loss) note="aim weakening: "+sig.lossEv;
+    else {
+      const names=SIGDEF.filter(([c])=>sig[c].on).map(([c,n])=>c).join(", ");
+      note="turbulence — watching "+names+". anchor confirmation may be needed.";
+    }
+    setZone("Z2",note);
+  } else {
+    setZone("Z1", S.revs.length? "anchors holding · "+S.revs.length+" revisions clean" : "watch active · awaiting v1");
+  }
+}
+function setZone(z,sub){
+  S.zone=z; document.body.dataset.zone=z;
+  $("zlabel").textContent = z==="Z1"?"Z1 · STABLE":z==="Z2"?"Z2 · TURBULENCE":"Z3 · EVENT HORIZON";
+  $("zsub").textContent=sub||"";
+}
+
+/* ---------- event horizon ---------- */
+function buildReport(sig,manual){
+  const fired=[];
+  ["C1","C2","C3","C4","W1"].forEach(c=>{ if(sig[c].on) fired.push(c+" — "+sig[c].ev); });
+  const drift=[];
+  if(sig.C1.on) drift.push("the objective itself");
+  if(sig.C2.on) drift.push("internal consistency");
+  if(sig.C3.on) drift.push("grounding");
+  if(sig.C4.on||sig.W1.on) drift.push("progress against criteria");
+  if(sig.lossOfAim) drift.push("what success means ("+sig.lossEv+")");
+  return {
+    why: manual
+      ? "Manual pause invoked. Freezing here so direction can be set before more work compounds."
+      : "Aim is lost and chaos is compounding at the same time — this is the last fork where a repair still lands cleanly. One more iteration and the drift becomes self-reinforcing.",
+    sig: fired.length?fired.join("  ·  "):"manual hold — no automatic signal",
+    drift: drift.length?drift.join(", "):"unspecified",
+    lose: manual?"whatever you'd lose by continuing on an unconfirmed aim"
+      :"the revisions stop being recoverable to a known-good state; the goal you can no longer state in one sentence becomes the goal you're optimizing blindly"
+  };
+}
+function triggerHorizon(rep){
+  S.halted=true;
+  setZone("Z3","hard stop — choose a repair to unlock");
+  $("rev").disabled=true; $("logBtn").disabled=true; $("forceBtn").disabled=true;
+  $("repWhy").textContent=rep.why;
+  $("repSig").textContent=rep.sig;
+  $("repDrift").textContent=rep.drift;
+  $("repLose").textContent=rep.lose;
+  $("gate").classList.remove("show"); S.pendingRepair=null;
+  $("horizon").classList.add("show");
+  $("horizon").scrollIntoView({behavior:"smooth",block:"center"});
+}
+function hideHorizon(){ $("horizon").classList.remove("show"); $("gate").classList.remove("show"); }
+
+/* repair menu */
+$("menu").addEventListener("click",e=>{
+  const opt=e.target.closest(".opt"); if(!opt) return;
+  S.pendingRepair=opt.dataset.r;
+  openGate(S.pendingRepair);
+});
+function openGate(r){
+  const titles={A:"Re-anchor — restate and confirm",B:"Roll back — confirm known-good",
+    C:"Verify — log open questions",D:"Split — narrow to one goal"};
+  $("gateTitle").textContent=titles[r];
+  const ex=$("gateExtra"); ex.innerHTML="";
+  if(r==="C"){
+    ex.innerHTML=`<label class="f">Open questions blocking progress</label>
+      <textarea id="oq" spellcheck="false" placeholder="List what must be answered before generation resumes."></textarea>`;
+  } else if(r==="D"){
+    ex.innerHTML=`<label class="f">The one narrowed goal to pursue now</label>
+      <textarea id="splitGoal" spellcheck="false" placeholder="A single sentence. The other task is set aside."></textarea>`;
+  } else {
+    ex.innerHTML=`<div style="font-family:var(--mono);font-size:11px;color:var(--dim);line-height:1.6">
+      Confirm the anchors above are correct (edit them if needed), then confirm the approach. ${r==="B"?"The most recent drifted revision will be dropped.":"Resume proceeds with minimal change only."}</div>`;
+  }
+  $("gate").classList.add("show");
+  $("gate").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+$("cancelGate").addEventListener("click",()=>{ $("gate").classList.remove("show"); S.pendingRepair=null; });
+
+$("confirmBtn").addEventListener("click",()=>{
+  const r=S.pendingRepair; if(!r) return;
+  const approach=$("approach").value;
+  if(r==="A"){
+    if(!anchorsValid()){ alert("Goal + ≥1 criterion required to re-anchor."); return; }
+    S.baseline=anchorString();                       // sanctioned re-baseline clears C1
+  }
+  if(r==="B"){
+    // drop most recent drifted revision
+    if(S.revs.length) S.revs.pop();
+  }
+  if(r==="C"){
+    const oq=($("oq")?.value||"").trim();
+    if(!oq){ alert("List the open questions before resuming."); return; }
+    S.revs.push({n:++revSeq,text:"[VERIFY] open questions logged:\n"+oq,words:wordsOf(oq),
+      sim:null,change:null,grew:false,wgrowth:0,marks:{},contradiction:false});
+  }
+  if(r==="D"){
+    const g=($("splitGoal")?.value||"").trim();
+    if(!g){ alert("State the one narrowed goal."); return; }
+    $("goal").value=g;
+    S.crits.forEach(c=>c.measurable=c.measurable); // keep
+    S.baseline=anchorString();
+  }
+  // resume
+  S.halted=false; S.pendingRepair=null;
+  hideHorizon();
+  $("rev").disabled=false; $("logBtn").disabled=false; $("forceBtn").disabled=false;
+  renderCrits(); renderRevs(); recompute();
+  // surface what was approved
+  $("zsub").textContent="resumed · "+({A:"re-anchored",B:"rolled back",C:"verifying",D:"split"})[r]+" · "+approach;
+});
+
+/* ---------- boot ---------- */
+addCrit("",false);
+renderCrits();
+renderRevs();
+renderSigs(blankSigs());
+setZone("Z1","anchors not yet set");
+</script>
+</body>
+</html>
