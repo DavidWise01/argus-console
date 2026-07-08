@@ -1,0 +1,9 @@
+ROOT0-DLW-CHAIN-v1
+index : 1063
+slug  : argus-console
+seal  : 39ae057ede4812e3077402edc966ca3ec32ff878bcf26a150186643a3527ce92
+prev  : e7818272937c1db24e01bcbdbf13581e0a29cef11ab1e42e27c501db1df7fe74
+link  : d526ace2caa374e4dcd0670c8c5871d0cbb7cde488dea80dc25e28d4935e11b2
+head  : 3447d3a0533aaf1e29a8bdc67a9774884fb3ae9dbc8a17064b7a008ca3c4ec90
+
+— the tether: link = sha256(index|slug|seal|prev). the chain head commits to the whole corpus.
